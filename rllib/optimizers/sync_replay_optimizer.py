@@ -30,6 +30,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
             workers,
             learning_starts=1000,
             buffer_size=10000,
+            temp_buffer_size = 20,
             prioritized_replay=True,
             prioritized_replay_alpha=0.6,
             prioritized_replay_beta=0.4,
@@ -95,7 +96,12 @@ class SyncReplayOptimizer(PolicyOptimizer):
             def new_buffer():
                 return ReplayBuffer(buffer_size)
 
+        def new_temp_buffer():
+            print("###### return new replay buffer")
+            return ReplayBuffer(temp_buffer_size)
+
         self.replay_buffers = collections.defaultdict(new_buffer)
+        self.temp_replay_buffers = collections.defaultdict(new_temp_buffer)
 
         if buffer_size < self.replay_starts:
             logger.warning("buffer_size={} < replay_starts={}".format(
@@ -124,6 +130,17 @@ class SyncReplayOptimizer(PolicyOptimizer):
                 batch = MultiAgentBatch({
                     DEFAULT_POLICY_ID: batch
                 }, batch.count)
+
+            for policy_id, s in batch.policy_batches.items():
+                for row in s.rows():
+                    self.temp_replay_buffers[policy_id].checkpacket()
+                    self.temp_replay_buffers[policy_id].add(
+                        pack_if_needed(row["obs"]),
+                        row["actions"],
+                        row["rewards"],
+                        pack_if_needed(row["new_obs"]),
+                        row["dones"],
+                        weight=None)
 
             for policy_id, s in batch.policy_batches.items():
                 for row in s.rows():
