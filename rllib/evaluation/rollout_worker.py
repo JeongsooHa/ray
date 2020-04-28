@@ -481,7 +481,7 @@ class RolloutWorker(EvaluatorInterface, ParallelIteratorWorker):
         Return:
             SampleBatch|MultiAgentBatch from evaluating the current policies.
         """
-
+        #print("##### rollout_worker.py sample")
         if self._fake_sampler and self.last_batch is not None:
             return self.last_batch
 

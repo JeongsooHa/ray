@@ -35,7 +35,6 @@ class ReplayBuffer:
 
     @DeveloperAPI
     def add(self, obs_t, action, reward, obs_tp1, done, weight):
-        print("### ReplayBuffer.add ###")
         data = (obs_t, action, reward, obs_tp1, done)
         self._num_added += 1
 
@@ -116,12 +115,6 @@ class ReplayBuffer:
             data.update(self._evicted_hit_stats.stats())
         return data
 
-    def checkpacket(self):
-        print("CHECK PACKET NUMBER")
-
-    def move_to_origin_buffer(self):
-        print("MOVE THIS TRAJECTORY TO ORIGIN BUFFER")
-
 
 @DeveloperAPI
 class PrioritizedReplayBuffer(ReplayBuffer):
@@ -157,9 +150,8 @@ class PrioritizedReplayBuffer(ReplayBuffer):
 
     @DeveloperAPI
     def add(self, obs_t, action, reward, obs_tp1, done, weight):
-        print("### PrioritizedReplayBuffer.add ###")
         """See ReplayBuffer.store_effect"""
-
+        # print("##### replay_buffer add")
         idx = self._next_idx
         super(PrioritizedReplayBuffer, self).add(obs_t, action, reward,
                                                  obs_tp1, done, weight)

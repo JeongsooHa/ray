@@ -138,6 +138,8 @@ def build_trainer(name,
 
         @override(Trainer)
         def _train(self):
+            # print("##### optimizer _train")
+
             if self.train_exec_impl:
                 return self._train_exec_impl()
 
@@ -147,6 +149,7 @@ def build_trainer(name,
 
             start = time.time()
             while True:
+                # print("##### call optimizer step")
                 fetches = self.optimizer.step()
                 if after_optimizer_step:
                     after_optimizer_step(self, fetches)

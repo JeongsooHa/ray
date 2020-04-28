@@ -257,6 +257,7 @@ class Trainable:
         Returns:
             A dict that describes training progress.
         """
+        # print("##### trainable _train")
         start = time.time()
         result = self._train()
         assert isinstance(result, dict), "_train() needs to return a dict."

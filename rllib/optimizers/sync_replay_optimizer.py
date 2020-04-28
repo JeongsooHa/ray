@@ -26,20 +26,20 @@ class SyncReplayOptimizer(PolicyOptimizer):
     term will be used for sample prioritization."""
 
     def __init__(
-            self,
-            workers,
-            learning_starts=1000,
-            buffer_size=10000,
-            temp_buffer_size = 20,
-            prioritized_replay=True,
-            prioritized_replay_alpha=0.6,
-            prioritized_replay_beta=0.4,
-            prioritized_replay_eps=1e-6,
-            final_prioritized_replay_beta=0.4,
-            train_batch_size=32,
-            before_learn_on_batch=None,
-            synchronize_sampling=False,
-            prioritized_replay_beta_annealing_timesteps=100000 * 0.2,
+        self,
+        workers,
+        learning_starts=1000,
+        buffer_size=10000,
+        temp_buffer_size=20,
+        prioritized_replay=True,
+        prioritized_replay_alpha=0.6,
+        prioritized_replay_beta=0.4,
+        prioritized_replay_eps=1e-6,
+        final_prioritized_replay_beta=0.4,
+        train_batch_size=32,
+        before_learn_on_batch=None,
+        synchronize_sampling=False,
+        prioritized_replay_beta_annealing_timesteps=100000 * 0.2,
     ):
         """Initialize an sync replay optimizer.
 
@@ -96,12 +96,14 @@ class SyncReplayOptimizer(PolicyOptimizer):
             def new_buffer():
                 return ReplayBuffer(buffer_size)
 
-        def new_temp_buffer():
-            print("###### return new replay buffer")
-            return ReplayBuffer(temp_buffer_size)
+        # def new_temp_buffer():
+        #     return ReplayBuffer(temp_buffer_size)
 
         self.replay_buffers = collections.defaultdict(new_buffer)
-        self.temp_replay_buffers = collections.defaultdict(new_temp_buffer)
+        # self.temp_replay_buffers = collections.defaultdict(new_temp_buffer)
+        self.temp_replay_buffers = {}
+        self.init = True
+        self.num_agents = 0
 
         if buffer_size < self.replay_starts:
             logger.warning("buffer_size={} < replay_starts={}".format(
@@ -109,12 +111,13 @@ class SyncReplayOptimizer(PolicyOptimizer):
 
     @override(PolicyOptimizer)
     def step(self):
+        print("##### Call step function in DQN")
         with self.update_weights_timer:
             if self.workers.remote_workers():
                 weights = ray.put(self.workers.local_worker().get_weights())
                 for e in self.workers.remote_workers():
                     e.set_weights.remote(weights)
-
+        print("##### finished set_weights")
         with self.sample_timer:
             if self.workers.remote_workers():
                 batch = SampleBatch.concat_samples(
@@ -122,40 +125,93 @@ class SyncReplayOptimizer(PolicyOptimizer):
                         e.sample.remote()
                         for e in self.workers.remote_workers()
                     ]))
+
             else:
                 batch = self.workers.local_worker().sample()
-
             # Handle everything as if multiagent
             if isinstance(batch, SampleBatch):
                 batch = MultiAgentBatch({
                     DEFAULT_POLICY_ID: batch
                 }, batch.count)
 
-            for policy_id, s in batch.policy_batches.items():
-                for row in s.rows():
-                    self.temp_replay_buffers[policy_id].checkpacket()
-                    self.temp_replay_buffers[policy_id].add(
-                        pack_if_needed(row["obs"]),
-                        row["actions"],
-                        row["rewards"],
-                        pack_if_needed(row["new_obs"]),
-                        row["dones"],
-                        weight=None)
+            if self.init:
+                for policy_id, s in batch.policy_batches.items():
+                    self.num_agents += 1
+                    self.temp_replay_buffers[policy_id] = []
+                self.init = False
 
+            import ipdb; ipdb.set_trace()
             for policy_id, s in batch.policy_batches.items():
                 for row in s.rows():
-                    self.replay_buffers[policy_id].add(
-                        pack_if_needed(row["obs"]),
-                        row["actions"],
-                        row["rewards"],
-                        pack_if_needed(row["new_obs"]),
-                        row["dones"],
-                        weight=None)
+                    trajectory = self.input_data_and_check_packetid(policy_id, row)
+                    if trajectory is not None:
+                        # put data into original buffer if length of temp RB is 20
+                        self.replay_buffers[policy_id].add(
+                            trajectory["obs"],
+                            trajectory["actions"],
+                            trajectory["rewards"],
+                            trajectory["new_obs"],
+                            trajectory["dones"],
+                            weight=None)
+
+            # for policy_id, s in batch.policy_batches.items():
+            #     for row in s.rows():
+            #         self.temp_replay_buffers[policy_id] = (
+            #             pack_if_needed(row["obs"]),
+            #             row["actions"],
+            #             row["rewards"],
+            #             pack_if_needed(row["new_obs"]),
+            #             row["dones"],
+            #             weight=None)
+            #         check = self.temp_replay_buffers[policy_id].checkpacket(row)
+            #         if check:
+            #             self.temp_replay_buffers[policy_id].move_to_origin_buffer(row, self.replay_buffer)
+            #
+            #         self.replay_buffers[policy_id].add(
+            #             pack_if_needed(row["obs"]),
+            #             row["actions"],
+            #             row["rewards"],
+            #             pack_if_needed(row["new_obs"]),
+            #             row["dones"],
+            #             weight=None)
+
+            # for policy_id, s in batch.policy_batches.items():
+            #     for row in s.rows():
+            #         self.replay_buffers[policy_id].add(
+            #             pack_if_needed(row["obs"]),
+            #             row["actions"],
+            #             row["rewards"],
+            #             pack_if_needed(row["new_obs"]),
+            #             row["dones"],
+            #             weight=None)
 
         if self.num_steps_sampled >= self.replay_starts:
             self._optimize()
 
         self.num_steps_sampled += batch.count
+
+    def input_data_and_check_packetid(self, policy_id, row):
+        # check packet id
+        if row["obs"][-3] == 1:
+            for trajectory in self.temp_replay_buffers[policy_id]:
+                # same packet id
+                # obs = ["C", "H", "delay", "delivery", "nACKs", "packet id"]
+                    if trajectory["obs"][-1] == row["obs"][-1]:
+                        # change rewards
+                        trajectory["rewards"] += self.num_agents
+                        break
+        else:
+            # Put data into temp_replay_buffers if there is no same packet id
+            # But if there is same packet id, don't need to put data in to temp_replay_buffer
+            self.temp_replay_buffers[policy_id].append(row)
+
+        # If length of temp_replay_buffer is 20
+        if len(self.temp_replay_buffers[policy_id]) == 20:
+            return self.temp_replay_buffers[policy_id].pop(0)
+        else:
+            return None
+
+
 
     @override(PolicyOptimizer)
     def stats(self):
@@ -211,9 +267,9 @@ class SyncReplayOptimizer(PolicyOptimizer):
                 if isinstance(replay_buffer, PrioritizedReplayBuffer):
                     (obses_t, actions, rewards, obses_tp1, dones, weights,
                      batch_indexes) = replay_buffer.sample_with_idxes(
-                         idxes,
-                         beta=self.prioritized_replay_beta.value(
-                             self.num_steps_trained))
+                        idxes,
+                        beta=self.prioritized_replay_beta.value(
+                            self.num_steps_trained))
                 else:
                     (obses_t, actions, rewards, obses_tp1,
                      dones) = replay_buffer.sample_with_idxes(idxes)
