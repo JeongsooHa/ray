@@ -140,7 +140,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
                     self.temp_replay_buffers[policy_id] = []
                 self.init = False
 
-            import ipdb; ipdb.set_trace()
+            # import ipdb; ipdb.set_trace()
             for policy_id, s in batch.policy_batches.items():
                 for row in s.rows():
                     trajectory = self.input_data_and_check_packetid(policy_id, row)
