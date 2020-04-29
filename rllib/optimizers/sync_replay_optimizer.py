@@ -102,6 +102,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
         self.replay_buffers = collections.defaultdict(new_buffer)
         # self.temp_replay_buffers = collections.defaultdict(new_temp_buffer)
         self.temp_replay_buffers = {}
+        self.buffer_countor = {}
         self.init = True
         self.num_agents = 0
 
@@ -138,6 +139,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
                 for policy_id, s in batch.policy_batches.items():
                     self.num_agents += 1
                     self.temp_replay_buffers[policy_id] = []
+                    self.buffer_countor[policy_id] = 0
                 self.init = False
 
             import ipdb; ipdb.set_trace()
@@ -153,6 +155,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
                             trajectory["new_obs"],
                             trajectory["dones"],
                             weight=None)
+                        self.buffer_countor[policy_id] += 1
 
             # for policy_id, s in batch.policy_batches.items():
             #     for row in s.rows():
@@ -184,32 +187,43 @@ class SyncReplayOptimizer(PolicyOptimizer):
             #             pack_if_needed(row["new_obs"]),
             #             row["dones"],
             #             weight=None)
+        # if self.num_steps_sampled >= self.replay_starts:
 
-        if self.num_steps_sampled >= self.replay_starts:
+        # If the minimum number in the buffer is self.replay_starts or more
+        if min(self.buffer_countor[policy_id]) >= self.replay_starts:
             self._optimize()
 
         self.num_steps_sampled += batch.count
 
     def input_data_and_check_packetid(self, policy_id, row):
-        # check packet id
-        if row["obs"][-3] == 1:
-            for trajectory in self.temp_replay_buffers[policy_id]:
-                # same packet id
-                # obs = ["C", "H", "delay", "delivery", "nACKs", "packet id"]
+        # Check busy node
+        isbusynode = False
+        if isbusynode:
+            return None
+        else:
+            # obs = ["C", "H", "delay", "delivery", "nACKs", "packet id"]
+            # Check delivery flag
+            if row["obs"][-3] == 1:
+                # Find same packet id
+                for trajectory in self.temp_replay_buffers[policy_id]:
                     if trajectory["obs"][-1] == row["obs"][-1]:
-                        # change rewards
+                        # Change rewards
                         trajectory["rewards"] += self.num_agents
                         break
-        else:
-            # Put data into temp_replay_buffers if there is no same packet id
-            # But if there is same packet id, don't need to put data in to temp_replay_buffer
-            self.temp_replay_buffers[policy_id].append(row)
+            else:
+                # Put data into temp_replay_buffers if there is no same packet id
+                # But if there is same packet id, don't need to put data in to temp_replay_buffer
+                self.temp_replay_buffers[policy_id].append(row)
 
-        # If length of temp_replay_buffer is 20
-        if len(self.temp_replay_buffers[policy_id]) == 20:
-            return self.temp_replay_buffers[policy_id].pop(0)
-        else:
-            return None
+            # If length of steps is more than 20
+            if self.num_steps_sampled > 20:
+                try:
+                    return self.temp_replay_buffers[policy_id].pop(0)
+                except Exception:
+                    # If there is no data in temp_replay_buffer
+                    return None
+            else:
+                return None
 
 
 
