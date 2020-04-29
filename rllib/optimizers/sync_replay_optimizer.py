@@ -142,7 +142,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
                     self.buffer_countor[policy_id] = 0
                 self.init = False
 
-            import ipdb; ipdb.set_trace()
+            # import ipdb; ipdb.set_trace()
             for policy_id, s in batch.policy_batches.items():
                 for row in s.rows():
                     trajectory = self.input_data_and_check_packetid(policy_id, row)
@@ -190,7 +190,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
         # if self.num_steps_sampled >= self.replay_starts:
 
         # If the minimum number in the buffer is self.replay_starts or more
-        if min(self.buffer_countor[policy_id]) >= self.replay_starts:
+        if min(self.buffer_countor.values()) >= self.replay_starts:
             self._optimize()
 
         self.num_steps_sampled += batch.count
