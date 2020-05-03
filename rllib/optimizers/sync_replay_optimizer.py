@@ -197,13 +197,12 @@ class SyncReplayOptimizer(PolicyOptimizer):
 
     def input_data_and_check_packetid(self, policy_id, row):
         # Check busy node
-        isbusynode = False
-        if isbusynode:
+        if row["obs"][-3]:
             return None
         else:
-            # obs = ["C", "H", "delay", "delivery", "nACKs", "packet id"]
+            # obs = ["C", "H", "delay", "delivery", "is_busy", "nACKs", "packet id"]
             # Check delivery flag
-            if row["obs"][-3] == 1:
+            if row["obs"][-4] == 1:
                 # Find same packet id
                 for trajectory in self.temp_replay_buffers[policy_id]:
                     if trajectory["obs"][-1] == row["obs"][-1]:
