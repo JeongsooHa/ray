@@ -190,7 +190,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
         # if self.num_steps_sampled >= self.replay_starts:
 
         # If the minimum number in the buffer is self.replay_starts or more
-        if min(self.buffer_countor[policy_id]) >= self.replay_starts:
+        if min(self.buffer_countor.values()) >= self.replay_starts:
             self._optimize()
 
         self.num_steps_sampled += batch.count
