@@ -109,16 +109,19 @@ class SyncReplayOptimizer(PolicyOptimizer):
         if buffer_size < self.replay_starts:
             logger.warning("buffer_size={} < replay_starts={}".format(
                 buffer_size, self.replay_starts))
+        self.debug_print = False
 
     @override(PolicyOptimizer)
     def step(self):
-        print("##### Call step function in DQN")
+        if self.debug_print:
+            print("##### Call step function in DQN")
         with self.update_weights_timer:
             if self.workers.remote_workers():
                 weights = ray.put(self.workers.local_worker().get_weights())
                 for e in self.workers.remote_workers():
                     e.set_weights.remote(weights)
-        print("##### finished set_weights")
+        if self.debug_print:
+            print("##### finished set_weights")
         with self.sample_timer:
             if self.workers.remote_workers():
                 batch = SampleBatch.concat_samples(
@@ -148,8 +151,9 @@ class SyncReplayOptimizer(PolicyOptimizer):
                     trajectory = self.input_data_and_check_packetid(policy_id, row)
                     if trajectory is not None:
                         # put data into original buffer if length of temp RB is 20
-                        print("Origin replay buffer  packID", trajectory["infos"]["packetid"][0], "reward",
-                              trajectory["rewards"], "delivery", trajectory["infos"]["delivery"][0])
+                        if self.debug_print:
+                            print("Origin replay buffer  packID", trajectory["infos"]["packetid"][0], "reward",
+                                  trajectory["rewards"], "delivery", trajectory["infos"]["delivery"][0])
                         self.replay_buffers[policy_id].add(
                             trajectory["obs"],
                             trajectory["actions"],
@@ -214,19 +218,21 @@ class SyncReplayOptimizer(PolicyOptimizer):
                         # Change rewards
                         trajectory["rewards"] += self.num_agents
                         trajectory["infos"]["delivery"][0] = 1
-                        print("##### UPDATE REWARD #####\nTEMP", policy_id, "reward ", trajectory["rewards"], " packetid ", trajectory["infos"]["packetid"][0])
+                        if self.debug_print:
+                            print("##### UPDATE REWARD #####\nTEMP", policy_id, "reward ", trajectory["rewards"], " packetid ", trajectory["infos"]["packetid"][0])
                         break
             else:
                 # Put data into temp_replay_buffers if there is no same packet id
                 # But if there is same packet id, don't need to put data in to temp_replay_buffer
                 self.temp_replay_buffers[policy_id].append(row)
-                for agent_i in self.temp_replay_buffers.keys():
-                    print("TEMP", agent_i)
-                    print("reward\t\t", " delivery\t", " packetid")
-                    for traj in self.temp_replay_buffers[agent_i]:
-                        print("   ", traj["rewards"], "\t\t   ", traj["infos"]["delivery"][0], "\t\t   ", traj["infos"]["packetid"][0])
-                    else:
-                        print("")
+                if self.debug_print:
+                    for agent_i in self.temp_replay_buffers.keys():
+                        print("TEMP", agent_i)
+                        print("reward\t\t", " delivery\t", " packetid")
+                        for traj in self.temp_replay_buffers[agent_i]:
+                            print("   ", traj["rewards"], "\t\t   ", traj["infos"]["delivery"][0], "\t\t   ", traj["infos"]["packetid"][0])
+                        else:
+                            print("")
         # If length of steps is more than 20
         if self.num_steps_sampled > 40:
             try:
