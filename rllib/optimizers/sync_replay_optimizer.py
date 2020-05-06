@@ -200,34 +200,40 @@ class SyncReplayOptimizer(PolicyOptimizer):
     def input_data_and_check_packetid(self, policy_id, row):
         # Check busy node
         # import ipdb; ipdb.set_trace()
-        if not len(row["infos"]):
+        if row["infos"]["packetid"][0] == -1:
             return None
         else:
             # obs = ["C", "H", "delay", "delivery", "is_busy", "nACKs", "packet id"]
             # Check delivery flag
             if row["infos"]["delivery"][0] == 1:
                 # Find same packet id
+
+                # self.temp_replay_buffers[policy_id].append(row)
                 for trajectory in self.temp_replay_buffers[policy_id]:
                     if trajectory["infos"]["packetid"][0] == row["infos"]["packetid"][0]:
                         # Change rewards
+                        print("##### UPDATE REWARD #####")
                         trajectory["rewards"] += self.num_agents
                         break
             else:
                 # Put data into temp_replay_buffers if there is no same packet id
                 # But if there is same packet id, don't need to put data in to temp_replay_buffer
-                if row["infos"]["packetid"][0] != -1:
-                    print("Temp replay buffer packetID", row["infos"]["packetid"][0], "reward", row["rewards"])
                 self.temp_replay_buffers[policy_id].append(row)
+                for agent_i in self.temp_replay_buffers.keys():
+                    print("TEMP", agent_i)
+                    print("reward\t\t", " delivery\t", " packetid")
+                    for traj in self.temp_replay_buffers[agent_i]:
+                        print("   ", traj["rewards"], "\t\t   ", traj["infos"]["delivery"][0], "\t\t   ", traj["infos"]["packetid"][0])
 
-            # If length of steps is more than 20
-            if self.num_steps_sampled > 20:
-                try:
-                    return self.temp_replay_buffers[policy_id].pop(0)
-                except Exception:
-                    # If there is no data in temp_replay_buffer
-                    return None
-            else:
+        # If length of steps is more than 20
+        if self.num_steps_sampled > 40:
+            try:
+                return self.temp_replay_buffers[policy_id].pop(0)
+            except Exception:
+                # If there is no data in temp_replay_buffer
                 return None
+        else:
+            return None
 
     @override(PolicyOptimizer)
     def stats(self):
