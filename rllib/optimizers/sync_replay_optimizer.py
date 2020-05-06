@@ -148,8 +148,8 @@ class SyncReplayOptimizer(PolicyOptimizer):
                     trajectory = self.input_data_and_check_packetid(policy_id, row)
                     if trajectory is not None:
                         # put data into original buffer if length of temp RB is 20
-                        print("Origin replay buffer packID", trajectory["infos"]["packetid"][0], "reward",
-                              trajectory["rewards"])
+                        print("Origin replay buffer  packID", trajectory["infos"]["packetid"][0], "reward",
+                              trajectory["rewards"], "delivery", trajectory["infos"]["delivery"][0])
                         self.replay_buffers[policy_id].add(
                             trajectory["obs"],
                             trajectory["actions"],
@@ -212,8 +212,9 @@ class SyncReplayOptimizer(PolicyOptimizer):
                 for trajectory in self.temp_replay_buffers[policy_id]:
                     if trajectory["infos"]["packetid"][0] == row["infos"]["packetid"][0]:
                         # Change rewards
-                        print("##### UPDATE REWARD #####")
                         trajectory["rewards"] += self.num_agents
+                        trajectory["infos"]["delivery"][0] = 1
+                        print("##### UPDATE REWARD #####\nTEMP", policy_id, "reward ", trajectory["rewards"], " packetid ", trajectory["infos"]["packetid"][0])
                         break
             else:
                 # Put data into temp_replay_buffers if there is no same packet id
@@ -224,7 +225,8 @@ class SyncReplayOptimizer(PolicyOptimizer):
                     print("reward\t\t", " delivery\t", " packetid")
                     for traj in self.temp_replay_buffers[agent_i]:
                         print("   ", traj["rewards"], "\t\t   ", traj["infos"]["delivery"][0], "\t\t   ", traj["infos"]["packetid"][0])
-
+                    else:
+                        print("")
         # If length of steps is more than 20
         if self.num_steps_sampled > 40:
             try:
