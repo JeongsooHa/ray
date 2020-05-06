@@ -148,6 +148,8 @@ class SyncReplayOptimizer(PolicyOptimizer):
                     trajectory = self.input_data_and_check_packetid(policy_id, row)
                     if trajectory is not None:
                         # put data into original buffer if length of temp RB is 20
+                        print("Origin replay buffer packID", trajectory["infos"]["packetid"][0], "reward",
+                              trajectory["rewards"])
                         self.replay_buffers[policy_id].add(
                             trajectory["obs"],
                             trajectory["actions"],
@@ -197,7 +199,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
 
     def input_data_and_check_packetid(self, policy_id, row):
         # Check busy node
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         if not len(row["infos"]):
             return None
         else:
@@ -213,6 +215,8 @@ class SyncReplayOptimizer(PolicyOptimizer):
             else:
                 # Put data into temp_replay_buffers if there is no same packet id
                 # But if there is same packet id, don't need to put data in to temp_replay_buffer
+                if row["infos"]["packetid"][0] != -1:
+                    print("Temp replay buffer packetID", row["infos"]["packetid"][0], "reward", row["rewards"])
                 self.temp_replay_buffers[policy_id].append(row)
 
             # If length of steps is more than 20
@@ -224,8 +228,6 @@ class SyncReplayOptimizer(PolicyOptimizer):
                     return None
             else:
                 return None
-
-
 
     @override(PolicyOptimizer)
     def stats(self):
