@@ -30,7 +30,6 @@ class SyncReplayOptimizer(PolicyOptimizer):
         workers,
         learning_starts=1000,
         buffer_size=10000,
-        temp_buffer_size=20,
         prioritized_replay=True,
         prioritized_replay_alpha=0.6,
         prioritized_replay_beta=0.4,
@@ -109,7 +108,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
         if buffer_size < self.replay_starts:
             logger.warning("buffer_size={} < replay_starts={}".format(
                 buffer_size, self.replay_starts))
-        self.debug_print = False
+        self.debug_print = True
 
     @override(PolicyOptimizer)
     def step(self):
@@ -202,28 +201,32 @@ class SyncReplayOptimizer(PolicyOptimizer):
         self.num_steps_sampled += batch.count
 
     def input_data_and_check_packetid(self, policy_id, row):
-        # Check busy node
-        # import ipdb; ipdb.set_trace()
+
+        # Check busy node. If the agent is busy, packetid is -1.
         if row["infos"]["packetid"][0] == -1:
             return None
         else:
-            # obs = ["C", "H", "delay", "delivery", "is_busy", "nACKs", "packet id"]
-            # Check delivery flag
+            # obs = ["C", "H"]
+            # infos = ["delivery", "nACKs", "packet id"]
+            # Check delivery flag. If the packet is delivered, delivery is 1.
+            # We have to check if that packetid is in temp_replay_buffer.
             if row["infos"]["delivery"][0] == 1:
+                if self.debug_print:
+                    print("##### delivery == 1 #####")
                 # Find same packet id
+                # Check if there is the same packet id in temp_repaly_buffer.
+                for agent_id in self.temp_replay_buffers.keys():
+                    for trajectory in self.temp_replay_buffers[agent_id]:
+                        if (trajectory["infos"]["packetid"][0] == row["infos"]["packetid"][0]) and \
+                                (trajectory["infos"]["delivery"][0] != 1) :
+                            # Change rewards and delivery flag
+                            trajectory["rewards"] += self.num_agents
+                            trajectory["infos"]["delivery"][0] = 1
+                            if self.debug_print:
+                                print("##### UPDATE REWARD #####\nTEMP", agent_id, "reward ", trajectory["rewards"], " packetid ", trajectory["infos"]["packetid"][0])
 
-                # self.temp_replay_buffers[policy_id].append(row)
-                for trajectory in self.temp_replay_buffers[policy_id]:
-                    if trajectory["infos"]["packetid"][0] == row["infos"]["packetid"][0]:
-                        # Change rewards
-                        trajectory["rewards"] += self.num_agents
-                        trajectory["infos"]["delivery"][0] = 1
-                        if self.debug_print:
-                            print("##### UPDATE REWARD #####\nTEMP", policy_id, "reward ", trajectory["rewards"], " packetid ", trajectory["infos"]["packetid"][0])
-                        break
             else:
-                # Put data into temp_replay_buffers if there is no same packet id
-                # But if there is same packet id, don't need to put data in to temp_replay_buffer
+                # Put data into temp_replay_buffers if delivery flag is not 1.
                 self.temp_replay_buffers[policy_id].append(row)
                 if self.debug_print:
                     for agent_i in self.temp_replay_buffers.keys():
@@ -234,7 +237,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
                         else:
                             print("")
         # If length of steps is more than 20
-        if self.num_steps_sampled > 40:
+        if self.num_steps_sampled > 1000:
             try:
                 return self.temp_replay_buffers[policy_id].pop(0)
             except Exception:
