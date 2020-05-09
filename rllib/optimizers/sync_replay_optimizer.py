@@ -1,6 +1,7 @@
 import logging
 import collections
 import numpy as np
+import matplotlib.pyplot as plt
 
 import ray
 from ray.rllib.optimizers.replay_buffer import ReplayBuffer, \
@@ -108,7 +109,29 @@ class SyncReplayOptimizer(PolicyOptimizer):
         if buffer_size < self.replay_starts:
             logger.warning("buffer_size={} < replay_starts={}".format(
                 buffer_size, self.replay_starts))
-        self.debug_print = True
+        self.debug_print = False
+
+
+        # For plot reward
+        
+        self.labels = ['G1', 'G2', 'G3', 'G4', 'G5']
+        self.men_means = [20, 35, 30, 35, 27]
+        self.women_means = [25, 32, 34, 20, 25]
+        self.men_std = [2, 3, 4, 1, 2]
+        self.women_std = [3, 5, 2, 3, 3]
+        self.width = 0.35       # the width of the bars: can also be len(x) sequence
+
+        self.fig, self.ax = plt.subplots()
+
+        self.ax.bar(self.labels, self.men_means, self.width, yerr=self.men_std, label='Men')
+        self.ax.bar(self.labels, self.women_means, self.width, yerr=self.women_std, bottom=self.men_means, label='Women')
+
+        self.ax.set_ylabel('Scores')
+        self.ax.set_title('Scores by group and gender')
+        self.ax.legend()
+
+        # self.plt.show()
+        
 
     @override(PolicyOptimizer)
     def step(self):
@@ -147,6 +170,201 @@ class SyncReplayOptimizer(PolicyOptimizer):
             # import ipdb; ipdb.set_trace()
             for policy_id, s in batch.policy_batches.items():
                 for row in s.rows():
+                    if policy_id == "dqn_policy0":
+                        num_temp_negative = 0
+                        num_temp_zero = 0
+                        num_temp_positive = 0
+                        num_origin_negative = 0
+                        num_origin_zero = 0
+                        num_origin_positive = 0
+
+                        for t in self.temp_replay_buffers[policy_id]:
+                            if t['rewards'] < 0:
+                                num_temp_negative += 1
+                            elif t['rewards'] > 0:
+                                num_temp_positive += 1
+                            else:
+                                num_temp_zero += 1
+                        
+                        for t in self.replay_buffers[policy_id]._storage:
+                            if t[2] < 0:
+                                num_origin_negative += 1
+                            elif t[2] > 0:
+                                num_origin_positive += 1
+                            else:
+                                num_origin_zero += 1
+                        
+                        with open("0_reward_temp.txt", "a") as f:
+                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                        with open("0_reward_origin.txt", "a") as f:
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+                    
+                    elif policy_id == "dqn_policy1":
+                        num_temp_negative = 0
+                        num_temp_zero = 0
+                        num_temp_positive = 0
+                        num_origin_negative = 0
+                        num_origin_zero = 0
+                        num_origin_positive = 0
+
+                        for t in self.temp_replay_buffers[policy_id]:
+                            if t['rewards'] < 0:
+                                num_temp_negative += 1
+                            elif t['rewards'] > 0:
+                                num_temp_positive += 1
+                            else:
+                                num_temp_zero += 1
+                        
+                        for t in self.replay_buffers[policy_id]._storage:
+                            if t[2] < 0:
+                                num_origin_negative += 1
+                            elif t[2] > 0:
+                                num_origin_positive += 1
+                            else:
+                                num_origin_zero += 1
+                        
+                        with open("1_reward_temp.txt", "a") as f:
+                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                        with open("1_reward_origin.txt", "a") as f:
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+
+                    elif policy_id == "dqn_policy2":
+                        num_temp_negative = 0
+                        num_temp_zero = 0
+                        num_temp_positive = 0
+                        num_origin_negative = 0
+                        num_origin_zero = 0
+                        num_origin_positive = 0
+
+                        for t in self.temp_replay_buffers[policy_id]:
+                            if t['rewards'] < 0:
+                                num_temp_negative += 1
+                            elif t['rewards'] > 0:
+                                num_temp_positive += 1
+                            else:
+                                num_temp_zero += 1
+                        
+                        for t in self.replay_buffers[policy_id]._storage:
+                            if t[2] < 0:
+                                num_origin_negative += 1
+                            elif t[2] > 0:
+                                num_origin_positive += 1
+                            else:
+                                num_origin_zero += 1
+                        
+                        with open("2_reward_temp.txt", "a") as f:
+                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                        with open("2_reward_origin.txt", "a") as f:
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+
+                    elif policy_id == "dqn_policy3":
+                        num_temp_negative = 0
+                        num_temp_zero = 0
+                        num_temp_positive = 0
+                        num_origin_negative = 0
+                        num_origin_zero = 0
+                        num_origin_positive = 0
+
+                        for t in self.temp_replay_buffers[policy_id]:
+                            if t['rewards'] < 0:
+                                num_temp_negative += 1
+                            elif t['rewards'] > 0:
+                                num_temp_positive += 1
+                            else:
+                                num_temp_zero += 1
+                        
+                        for t in self.replay_buffers[policy_id]._storage:
+                            if t[2] < 0:
+                                num_origin_negative += 1
+                            elif t[2] > 0:
+                                num_origin_positive += 1
+                            else:
+                                num_origin_zero += 1
+                        
+                        with open("3_reward_temp.txt", "a") as f:
+                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                        with open("3_reward_origin.txt", "a") as f:
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+
+                    elif policy_id == "dqn_policy4":
+                        num_temp_negative = 0
+                        num_temp_zero = 0
+                        num_temp_positive = 0
+                        num_origin_negative = 0
+                        num_origin_zero = 0
+                        num_origin_positive = 0
+
+                        for t in self.temp_replay_buffers[policy_id]:
+                            if t['rewards'] < 0:
+                                num_temp_negative += 1
+                            elif t['rewards'] > 0:
+                                num_temp_positive += 1
+                            else:
+                                num_temp_zero += 1
+                        
+                        for t in self.replay_buffers[policy_id]._storage:
+                            if t[2] < 0:
+                                num_origin_negative += 1
+                            elif t[2] > 0:
+                                num_origin_positive += 1
+                            else:
+                                num_origin_zero += 1
+                        
+                        with open("4_reward_temp.txt", "a") as f:
+                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                        with open("4_reward_origin.txt", "a") as f:
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+
+                    elif policy_id == "dqn_policy5":
+                        num_temp_negative = 0
+                        num_temp_zero = 0
+                        num_temp_positive = 0
+                        num_origin_negative = 0
+                        num_origin_zero = 0
+                        num_origin_positive = 0
+
+                        for t in self.temp_replay_buffers[policy_id]:
+                            if t['rewards'] < 0:
+                                num_temp_negative += 1
+                            elif t['rewards'] > 0:
+                                num_temp_positive += 1
+                            else:
+                                num_temp_zero += 1
+                        
+                        for t in self.replay_buffers[policy_id]._storage:
+                            if t[2] < 0:
+                                num_origin_negative += 1
+                            elif t[2] > 0:
+                                num_origin_positive += 1
+                            else:
+                                num_origin_zero += 1
+                        
+                        with open("5_reward_temp.txt", "a") as f:
+                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                        with open("5_reward_origin.txt", "a") as f:
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+
+
+                    # if policy_id == "dqn_policy1":
+                    #     print(policy_id)
+                    #     print("Size of temp buffer", len(self.temp_replay_buffers[policy_id]))
+                    #     print("Size of origin buffer", len(self.replay_buffers[policy_id]))
+                    
+                    # if policy_id == "dqn_policy2":
+                    #     print(policy_id)
+                    #     print("Size of temp buffer", len(self.temp_replay_buffers[policy_id]))
+                    #     print("Size of origin buffer", len(self.replay_buffers[policy_id]))
+                    
+                    # if policy_id == "dqn_policy3":
+                    #     print(policy_id)
+                    #     print("Size of temp buffer", len(self.temp_replay_buffers[policy_id]))
+                    #     print("Size of origin buffer", len(self.replay_buffers[policy_id]))
+
+                    # if policy_id == "dqn_policy4":
+                    #     print(policy_id)
+                    #     print("Size of temp buffer", len(self.temp_replay_buffers[policy_id]))
+                    #     print("Size of origin buffer", len(self.replay_buffers[policy_id]))
+
                     trajectory = self.input_data_and_check_packetid(policy_id, row)
                     if trajectory is not None:
                         # put data into original buffer if length of temp RB is 20
