@@ -108,7 +108,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
         if buffer_size < self.replay_starts:
             logger.warning("buffer_size={} < replay_starts={}".format(
                 buffer_size, self.replay_starts))
-        self.debug_print = True
+        self.debug_print = False
 
     @override(PolicyOptimizer)
     def step(self):
