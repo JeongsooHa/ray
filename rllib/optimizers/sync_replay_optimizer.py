@@ -1,8 +1,10 @@
 import logging
 import collections
 import numpy as np
-
+import matplotlib.pyplot as plt
+import csv
 import ray
+from copy import deepcopy
 from ray.rllib.optimizers.replay_buffer import ReplayBuffer, \
     PrioritizedReplayBuffer
 from ray.rllib.optimizers.policy_optimizer import PolicyOptimizer
@@ -17,6 +19,9 @@ from ray.rllib.utils.memory import ray_get_and_free
 
 logger = logging.getLogger(__name__)
 
+policy_dict = {}
+for i in range(12):
+    policy_dict["dqn_policy"+str(i)] = "agent-"+str(i)
 
 class SyncReplayOptimizer(PolicyOptimizer):
     """Variant of the local sync optimizer that supports replay (for DQN).
@@ -99,16 +104,39 @@ class SyncReplayOptimizer(PolicyOptimizer):
         #     return ReplayBuffer(temp_buffer_size)
 
         self.replay_buffers = collections.defaultdict(new_buffer)
-        # self.temp_replay_buffers = collections.defaultdict(new_temp_buffer)
         self.temp_replay_buffers = {}
+        self.debug_temp_replay_buffers = {}
         self.buffer_countor = {}
         self.init = True
         self.num_agents = 0
+        self.csv_columns = ['t', 'agent_index', 'obs', 'packetid', 'delivery', 'rewards', 'new_reward', 'movetooriginal']
+        self.csv_file = ["agent0.csv", "agent1.csv", "agent2.csv", "agent3.csv", "agent4.csv", "agent5.csv"]
+        self.csv_count = 0
 
         if buffer_size < self.replay_starts:
             logger.warning("buffer_size={} < replay_starts={}".format(
                 buffer_size, self.replay_starts))
-        self.debug_print = True
+
+        self.debug_print = False
+
+        # For plot reward
+        self.labels = ['G1', 'G2', 'G3', 'G4', 'G5']
+        self.men_means = [20, 35, 30, 35, 27]
+        self.women_means = [25, 32, 34, 20, 25]
+        self.men_std = [2, 3, 4, 1, 2]
+        self.women_std = [3, 5, 2, 3, 3]
+        self.width = 0.35       # the width of the bars: can also be len(x) sequence
+
+        self.fig, self.ax = plt.subplots()
+
+        self.ax.bar(self.labels, self.men_means, self.width, yerr=self.men_std, label='Men')
+        self.ax.bar(self.labels, self.women_means, self.width, yerr=self.women_std, bottom=self.men_means, label='Women')
+
+        self.ax.set_ylabel('Scores')
+        self.ax.set_title('Scores by group and gender')
+        self.ax.legend()
+
+        # self.plt.show()
 
     @override(PolicyOptimizer)
     def step(self):
@@ -141,18 +169,216 @@ class SyncReplayOptimizer(PolicyOptimizer):
                 for policy_id, s in batch.policy_batches.items():
                     self.num_agents += 1
                     self.temp_replay_buffers[policy_id] = []
+                    self.debug_temp_replay_buffers[policy_id] = []
                     self.buffer_countor[policy_id] = 0
+                    # Have to remove csv files and text files
                 self.init = False
 
             # import ipdb; ipdb.set_trace()
             for policy_id, s in batch.policy_batches.items():
                 for row in s.rows():
+                    if policy_id == "dqn_policy0":
+                        num_temp_negative = 0
+                        num_temp_zero = 0
+                        num_temp_positive = 0
+                        num_origin_negative = 0
+                        num_origin_zero = 0
+                        num_origin_positive = 0
+
+                        for t in self.temp_replay_buffers[policy_id]:
+                            if t['rewards'] < 0:
+                                num_temp_negative += 1
+                            elif t['rewards'] > 0:
+                                num_temp_positive += 1
+                            else:
+                                num_temp_zero += 1
+
+                        for t in self.replay_buffers[policy_id]._storage:
+                            if t[2] < 0:
+                                num_origin_negative += 1
+                            elif t[2] > 0:
+                                num_origin_positive += 1
+                            else:
+                                num_origin_zero += 1
+
+                        with open("./results/0_reward_temp.txt", "a") as f:
+                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                        with open("./results/0_reward_origin.txt", "a") as f:
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+
+                    elif policy_id == "dqn_policy1":
+                        num_temp_negative = 0
+                        num_temp_zero = 0
+                        num_temp_positive = 0
+                        num_origin_negative = 0
+                        num_origin_zero = 0
+                        num_origin_positive = 0
+
+                        for t in self.temp_replay_buffers[policy_id]:
+                            if t['rewards'] < 0:
+                                num_temp_negative += 1
+                            elif t['rewards'] > 0:
+                                num_temp_positive += 1
+                            else:
+                                num_temp_zero += 1
+
+                        for t in self.replay_buffers[policy_id]._storage:
+                            if t[2] < 0:
+                                num_origin_negative += 1
+                            elif t[2] > 0:
+                                num_origin_positive += 1
+                            else:
+                                num_origin_zero += 1
+
+                        with open("./results/1_reward_temp.txt", "a") as f:
+                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                        with open("./results/1_reward_origin.txt", "a") as f:
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+
+                    elif policy_id == "dqn_policy2":
+                        num_temp_negative = 0
+                        num_temp_zero = 0
+                        num_temp_positive = 0
+                        num_origin_negative = 0
+                        num_origin_zero = 0
+                        num_origin_positive = 0
+
+                        for t in self.temp_replay_buffers[policy_id]:
+                            if t['rewards'] < 0:
+                                num_temp_negative += 1
+                            elif t['rewards'] > 0:
+                                num_temp_positive += 1
+                            else:
+                                num_temp_zero += 1
+
+                        for t in self.replay_buffers[policy_id]._storage:
+                            if t[2] < 0:
+                                num_origin_negative += 1
+                            elif t[2] > 0:
+                                num_origin_positive += 1
+                            else:
+                                num_origin_zero += 1
+
+                        with open("./results/2_reward_temp.txt", "a") as f:
+                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                        with open("./results/2_reward_origin.txt", "a") as f:
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+
+                    elif policy_id == "dqn_policy3":
+                        num_temp_negative = 0
+                        num_temp_zero = 0
+                        num_temp_positive = 0
+                        num_origin_negative = 0
+                        num_origin_zero = 0
+                        num_origin_positive = 0
+
+                        for t in self.temp_replay_buffers[policy_id]:
+                            if t['rewards'] < 0:
+                                num_temp_negative += 1
+                            elif t['rewards'] > 0:
+                                num_temp_positive += 1
+                            else:
+                                num_temp_zero += 1
+
+                        for t in self.replay_buffers[policy_id]._storage:
+                            if t[2] < 0:
+                                num_origin_negative += 1
+                            elif t[2] > 0:
+                                num_origin_positive += 1
+                            else:
+                                num_origin_zero += 1
+
+                        with open("./results/3_reward_temp.txt", "a") as f:
+                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                        with open("./results/3_reward_origin.txt", "a") as f:
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+
+                    elif policy_id == "dqn_policy4":
+                        num_temp_negative = 0
+                        num_temp_zero = 0
+                        num_temp_positive = 0
+                        num_origin_negative = 0
+                        num_origin_zero = 0
+                        num_origin_positive = 0
+
+                        for t in self.temp_replay_buffers[policy_id]:
+                            if t['rewards'] < 0:
+                                num_temp_negative += 1
+                            elif t['rewards'] > 0:
+                                num_temp_positive += 1
+                            else:
+                                num_temp_zero += 1
+
+                        for t in self.replay_buffers[policy_id]._storage:
+                            if t[2] < 0:
+                                num_origin_negative += 1
+                            elif t[2] > 0:
+                                num_origin_positive += 1
+                            else:
+                                num_origin_zero += 1
+
+                        with open("./results/4_reward_temp.txt", "a") as f:
+                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                        with open("./results/4_reward_origin.txt", "a") as f:
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+
+                    elif policy_id == "dqn_policy5":
+                        num_temp_negative = 0
+                        num_temp_zero = 0
+                        num_temp_positive = 0
+                        num_origin_negative = 0
+                        num_origin_zero = 0
+                        num_origin_positive = 0
+
+                        for t in self.temp_replay_buffers[policy_id]:
+                            if t['rewards'] < 0:
+                                num_temp_negative += 1
+                            elif t['rewards'] > 0:
+                                num_temp_positive += 1
+                            else:
+                                num_temp_zero += 1
+
+                        for t in self.replay_buffers[policy_id]._storage:
+                            if t[2] < 0:
+                                num_origin_negative += 1
+                            elif t[2] > 0:
+                                num_origin_positive += 1
+                            else:
+                                num_origin_zero += 1
+
+                        with open("./results/5_reward_temp.txt", "a") as f:
+                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                        with open("./results/5_reward_origin.txt", "a") as f:
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+
+
+                    # if policy_id == "dqn_policy1":
+                    #     print(policy_id)
+                    #     print("Size of temp buffer", len(self.temp_replay_buffers[policy_id]))
+                    #     print("Size of origin buffer", len(self.replay_buffers[policy_id]))
+
+                    # if policy_id == "dqn_policy2":
+                    #     print(policy_id)
+                    #     print("Size of temp buffer", len(self.temp_replay_buffers[policy_id]))
+                    #     print("Size of origin buffer", len(self.replay_buffers[policy_id]))
+
+                    # if policy_id == "dqn_policy3":
+                    #     print(policy_id)
+                    #     print("Size of temp buffer", len(self.temp_replay_buffers[policy_id]))
+                    #     print("Size of origin buffer", len(self.replay_buffers[policy_id]))
+
+                    # if policy_id == "dqn_policy4":
+                    #     print(policy_id)
+                    #     print("Size of temp buffer", len(self.temp_replay_buffers[policy_id]))
+                    #     print("Size of origin buffer", len(self.replay_buffers[policy_id]))
+
                     trajectory = self.input_data_and_check_packetid(policy_id, row)
                     if trajectory is not None:
                         # put data into original buffer if length of temp RB is 20
                         if self.debug_print:
                             print("Origin replay buffer  packID", trajectory["infos"]["packetid"][0], "reward",
                                   trajectory["rewards"], "delivery", trajectory["infos"]["delivery"][0])
+                        # print("ORIGIN\t",trajectory["rewards"])
                         self.replay_buffers[policy_id].add(
                             trajectory["obs"],
                             trajectory["actions"],
@@ -193,6 +419,54 @@ class SyncReplayOptimizer(PolicyOptimizer):
             #             row["dones"],
             #             weight=None)
         # if self.num_steps_sampled >= self.replay_starts:
+        # save temp replay buffer to debug
+
+        if self.num_steps_sampled != 0 and self.num_steps_sampled % 1000 == 0:
+            try:
+                # import ipdb; ipdb.set_trace()
+                for idx in range(6):
+                    with open('./csv_results/'+str(self.csv_count)+"_"+self.csv_file[idx], 'w') as csvfile:
+                        writer = csv.DictWriter(csvfile, fieldnames=self.csv_columns)
+                        writer.writeheader()
+                        for trajectory in self.debug_temp_replay_buffers["dqn_policy"+str(idx)]:
+                            # self.csv_columns =
+                            # ['t', 'agent_index', 'obs', 'packetid', 'delivery', 'rewards', 'new_reward', 'movetooriginal']
+                            writer.writerow({'t':trajectory['t'],
+                                             'agent_index':trajectory['agent_index'],
+                                             'obs':trajectory['obs'],
+                                             'packetid':trajectory['infos']['packetid'][0],
+                                             'delivery':trajectory['infos']['delivery'][0],
+                                             'rewards':trajectory['rewards'],
+                                             'new_reward':trajectory['new_reward'],
+                                             'movetooriginal':trajectory['movetooriginal']})
+                self.csv_count += 1
+                # with open(self.csv_file[1], 'w') as csvfile:
+                #     writer = csv.DictWriter(csvfile, fieldnames=self.csv_columns)
+                #     writer.writeheader()
+                #     for trajectory in self.debug_temp_replay_buffers["agent-1"]:
+                #         writer.writerow(trajectory)
+                # with open(self.csv_file[2], 'w') as csvfile:
+                #     writer = csv.DictWriter(csvfile, fieldnames=self.csv_columns)
+                #     writer.writeheader()
+                #     for trajectory in self.debug_temp_replay_buffers["agent-0"]:
+                #         writer.writerow(trajectory)
+                # with open(self.csv_file[3], 'w') as csvfile:
+                #     writer = csv.DictWriter(csvfile, fieldnames=self.csv_columns)
+                #     writer.writeheader()
+                #     for trajectory in self.debug_temp_replay_buffers["agent-0"]:
+                #         writer.writerow(trajectory)
+                # with open(self.csv_file[4], 'w') as csvfile:
+                #     writer = csv.DictWriter(csvfile, fieldnames=self.csv_columns)
+                #     writer.writeheader()
+                #     for trajectory in self.debug_temp_replay_buffers["agent-0"]:
+                #         writer.writerow(trajectory)
+                # with open(self.csv_file[5], 'w') as csvfile:
+                #     writer = csv.DictWriter(csvfile, fieldnames=self.csv_columns)
+                #     writer.writeheader()
+                #     for trajectory in self.debug_temp_replay_buffers["agent-0"]:
+                #         writer.writerow(trajectory)
+            except IOError:
+                print("I/O error")
 
         # If the minimum number in the buffer is self.replay_starts or more
         if min(self.buffer_countor.values()) >= self.replay_starts:
@@ -201,7 +475,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
         self.num_steps_sampled += batch.count
 
     def input_data_and_check_packetid(self, policy_id, row):
-
+        tt = False
         # Check busy node. If the agent is busy, packetid is -1.
         if row["infos"]["packetid"][0] == -1:
             return None
@@ -215,19 +489,51 @@ class SyncReplayOptimizer(PolicyOptimizer):
                     print("##### delivery == 1 #####")
                 # Find same packet id
                 # Check if there is the same packet id in temp_repaly_buffer.
-                for agent_id in self.temp_replay_buffers.keys():
-                    for trajectory in self.temp_replay_buffers[agent_id]:
-                        if (trajectory["infos"]["packetid"][0] == row["infos"]["packetid"][0]) and \
-                                (trajectory["infos"]["delivery"][0] != 1) :
-                            # Change rewards and delivery flag
-                            trajectory["rewards"] += self.num_agents
-                            trajectory["infos"]["delivery"][0] = 1
-                            if self.debug_print:
-                                print("##### UPDATE REWARD #####\nTEMP", agent_id, "reward ", trajectory["rewards"], " packetid ", trajectory["infos"]["packetid"][0])
+                for policy_id in self.temp_replay_buffers.keys():
+                    if policy_dict[policy_id] in row["infos"]["delivery_states"][-1]:
+                        if np.inf not in row["infos"]["delivery_states"][-1][policy_dict[policy_id]]:
+                            for trajectory in self.temp_replay_buffers[policy_id]:
+                                if (trajectory["infos"]["packetid"][0] == row["infos"]["packetid"][0]) and \
+                                        (trajectory["infos"]["delivery"][0] != 1) :
+                                    # Change rewards and delivery flag
+                                    # import ipdb; ipdb.set_trace()
+                                    trajectory["rewards"] += self.num_agents
+                                    trajectory["infos"]["delivery"][0] = 1
+                                    # print('_temp',trajectory['t'], policy_dict[policy_id], trajectory["rewards"])
+                                    # tt = True
+                                    # print(policy_id, trajectory['t'], trajectory["rewards"], trajectory["infos"]["packetid"][0])
+                                    # print("TEMP\t", trajectory["rewards"])
+                                    if self.debug_print:
+                                        print("##### UPDATE REWARD #####\nTEMP", policy_dict[policy_id], "reward ", trajectory["rewards"], " packetid ", trajectory["infos"]["packetid"][0])
+
+                            # For debugging temp replay buffer states
+                            for d_trajectory in self.debug_temp_replay_buffers[policy_id]:
+                                if (d_trajectory["infos"]["packetid"][0] == row["infos"]["packetid"][0]) and \
+                                        (d_trajectory["infos"]["delivery"][0] != 1) and\
+                                        (d_trajectory["movetooriginal"] != 1):
+                                    # Change rewards and delivery flag
+                                    d_trajectory["new_reward"] = self.num_agents + d_trajectory["rewards"]
+                                    d_trajectory["infos"]["delivery"][0] = 1
+                                    # print('_debug',d_trajectory['t'], policy_dict[policy_id], d_trajectory["rewards"], d_trajectory["new_reward"])
+
+                #     import ipdb; ipdb.set_trace()
+                # for policy_id_ in self.debug_temp_replay_buffers.keys():
+                #     if policy_dict[policy_id_] in row["infos"]["delivery_states"][-1]:
+                #         if np.inf not in row["infos"]["delivery_states"][-1][policy_dict[policy_id_]]:
+                #             for trajectory_ in self.debug_temp_replay_buffers[policy_id_]:
+                #                 if (trajectory_["infos"]["packetid"][0] == row["infos"]["packetid"][0]) and \
+                #                         (trajectory_["infos"]["delivery"][0] != 1) :
+                #                     print(trajectory_['t'], policy_dict[policy_id_])
+                #                     # Change rewards and delivery flag
+                #                     trajectory_["new_reward"] = self.num_agents + trajectory_["rewards"]
+                #                     trajectory_["infos"]["delivery"][0] = 1
 
             else:
                 # Put data into temp_replay_buffers if delivery flag is not 1.
-                self.temp_replay_buffers[policy_id].append(row)
+                self.temp_replay_buffers[policy_id].append(deepcopy(row))
+                row["new_reward"] = None
+                row["movetooriginal"] = 0
+                self.debug_temp_replay_buffers[policy_id].append(deepcopy(row))
                 if self.debug_print:
                     for agent_i in self.temp_replay_buffers.keys():
                         print("TEMP", agent_i)
@@ -237,9 +543,13 @@ class SyncReplayOptimizer(PolicyOptimizer):
                         else:
                             print("")
         # If length of steps is more than 20
-        if self.num_steps_sampled > 1000:
+        if (self.num_steps_sampled > 1000) and (len(self.temp_replay_buffers[policy_id]) > 1000):
             try:
-                return self.temp_replay_buffers[policy_id].pop(0)
+                output = self.temp_replay_buffers[policy_id].pop(0)
+                for traj in self.debug_temp_replay_buffers[policy_id]:
+                    if (traj["t"] == output["t"]) and (traj["infos"]["packetid"][0] == output["infos"]["packetid"][0]):
+                        traj["movetooriginal"] = 1
+                return output
             except Exception:
                 # If there is no data in temp_replay_buffer
                 return None
