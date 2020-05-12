@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv
 import ray
+import os
+
 from copy import deepcopy
 from ray.rllib.optimizers.replay_buffer import ReplayBuffer, \
     PrioritizedReplayBuffer
@@ -21,7 +23,8 @@ logger = logging.getLogger(__name__)
 
 policy_dict = {}
 for i in range(12):
-    policy_dict["dqn_policy"+str(i)] = "agent-"+str(i)
+    policy_dict["dqn_policy" + str(i)] = "agent-" + str(i)
+
 
 class SyncReplayOptimizer(PolicyOptimizer):
     """Variant of the local sync optimizer that supports replay (for DQN).
@@ -31,19 +34,19 @@ class SyncReplayOptimizer(PolicyOptimizer):
     term will be used for sample prioritization."""
 
     def __init__(
-        self,
-        workers,
-        learning_starts=1000,
-        buffer_size=10000,
-        prioritized_replay=True,
-        prioritized_replay_alpha=0.6,
-        prioritized_replay_beta=0.4,
-        prioritized_replay_eps=1e-6,
-        final_prioritized_replay_beta=0.4,
-        train_batch_size=32,
-        before_learn_on_batch=None,
-        synchronize_sampling=False,
-        prioritized_replay_beta_annealing_timesteps=100000 * 0.2,
+            self,
+            workers,
+            learning_starts=1000,
+            buffer_size=10000,
+            prioritized_replay=True,
+            prioritized_replay_alpha=0.6,
+            prioritized_replay_beta=0.4,
+            prioritized_replay_eps=1e-6,
+            final_prioritized_replay_beta=0.4,
+            train_batch_size=32,
+            before_learn_on_batch=None,
+            synchronize_sampling=False,
+            prioritized_replay_beta_annealing_timesteps=100000 * 0.2,
     ):
         """Initialize an sync replay optimizer.
 
@@ -65,6 +68,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
             prioritized_replay_beta_annealing_timesteps (int): The timestep at
                 which PR-beta annealing should end.
         """
+        print("########## debug RB 5_12_ ###########")
         PolicyOptimizer.__init__(self, workers)
 
         self.replay_starts = learning_starts
@@ -109,7 +113,8 @@ class SyncReplayOptimizer(PolicyOptimizer):
         self.buffer_countor = {}
         self.init = True
         self.num_agents = 0
-        self.csv_columns = ['t', 'agent_index', 'obs', 'packetid', 'delivery', 'rewards', 'new_reward', 'movetooriginal']
+        self.csv_columns = ['t', 'agent_index', 'obs', 'packetid', 'delivery', 'rewards', 'new_reward',
+                            'movetooriginal', 'actions', 'n_ack', 'dones', 'delivery_states']
         self.csv_file = ["agent0.csv", "agent1.csv", "agent2.csv", "agent3.csv", "agent4.csv", "agent5.csv"]
         self.csv_count = 0
 
@@ -125,18 +130,27 @@ class SyncReplayOptimizer(PolicyOptimizer):
         self.women_means = [25, 32, 34, 20, 25]
         self.men_std = [2, 3, 4, 1, 2]
         self.women_std = [3, 5, 2, 3, 3]
-        self.width = 0.35       # the width of the bars: can also be len(x) sequence
+        self.width = 0.35  # the width of the bars: can also be len(x) sequence
 
         self.fig, self.ax = plt.subplots()
 
         self.ax.bar(self.labels, self.men_means, self.width, yerr=self.men_std, label='Men')
-        self.ax.bar(self.labels, self.women_means, self.width, yerr=self.women_std, bottom=self.men_means, label='Women')
+        self.ax.bar(self.labels, self.women_means, self.width, yerr=self.women_std, bottom=self.men_means,
+                    label='Women')
 
         self.ax.set_ylabel('Scores')
         self.ax.set_title('Scores by group and gender')
         self.ax.legend()
 
         # self.plt.show()
+
+    # def removeAllFiles(self, filePath):
+    #     if os.path.exists(filePath):
+    #         for file in os.scandir(filePath):
+    #             os.remove(file.path)
+    #         return 'Remove All File'
+    #     else:
+    #         return 'Directory Not Found'
 
     @override(PolicyOptimizer)
     def step(self):
@@ -171,6 +185,8 @@ class SyncReplayOptimizer(PolicyOptimizer):
                     self.temp_replay_buffers[policy_id] = []
                     self.debug_temp_replay_buffers[policy_id] = []
                     self.buffer_countor[policy_id] = 0
+                    # self.removeAllFiles('./results/')
+                    # self.removeAllFiles('./csv_results/')
                     # Have to remove csv files and text files
                 self.init = False
 
@@ -202,9 +218,11 @@ class SyncReplayOptimizer(PolicyOptimizer):
                                 num_origin_zero += 1
 
                         with open("./results/0_reward_temp.txt", "a") as f:
-                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                            f.write(
+                                str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
                         with open("./results/0_reward_origin.txt", "a") as f:
-                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(
+                                num_origin_positive) + "\n")
 
                     elif policy_id == "dqn_policy1":
                         num_temp_negative = 0
@@ -231,9 +249,11 @@ class SyncReplayOptimizer(PolicyOptimizer):
                                 num_origin_zero += 1
 
                         with open("./results/1_reward_temp.txt", "a") as f:
-                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                            f.write(
+                                str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
                         with open("./results/1_reward_origin.txt", "a") as f:
-                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(
+                                num_origin_positive) + "\n")
 
                     elif policy_id == "dqn_policy2":
                         num_temp_negative = 0
@@ -260,9 +280,11 @@ class SyncReplayOptimizer(PolicyOptimizer):
                                 num_origin_zero += 1
 
                         with open("./results/2_reward_temp.txt", "a") as f:
-                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                            f.write(
+                                str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
                         with open("./results/2_reward_origin.txt", "a") as f:
-                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(
+                                num_origin_positive) + "\n")
 
                     elif policy_id == "dqn_policy3":
                         num_temp_negative = 0
@@ -289,9 +311,11 @@ class SyncReplayOptimizer(PolicyOptimizer):
                                 num_origin_zero += 1
 
                         with open("./results/3_reward_temp.txt", "a") as f:
-                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                            f.write(
+                                str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
                         with open("./results/3_reward_origin.txt", "a") as f:
-                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(
+                                num_origin_positive) + "\n")
 
                     elif policy_id == "dqn_policy4":
                         num_temp_negative = 0
@@ -318,9 +342,11 @@ class SyncReplayOptimizer(PolicyOptimizer):
                                 num_origin_zero += 1
 
                         with open("./results/4_reward_temp.txt", "a") as f:
-                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                            f.write(
+                                str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
                         with open("./results/4_reward_origin.txt", "a") as f:
-                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(
+                                num_origin_positive) + "\n")
 
                     elif policy_id == "dqn_policy5":
                         num_temp_negative = 0
@@ -347,10 +373,11 @@ class SyncReplayOptimizer(PolicyOptimizer):
                                 num_origin_zero += 1
 
                         with open("./results/5_reward_temp.txt", "a") as f:
-                            f.write(str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
+                            f.write(
+                                str(num_temp_negative) + " " + str(num_temp_zero) + " " + str(num_temp_positive) + "\n")
                         with open("./results/5_reward_origin.txt", "a") as f:
-                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(num_origin_positive) + "\n")
-
+                            f.write(str(num_origin_negative) + " " + str(num_origin_zero) + " " + str(
+                                num_origin_positive) + "\n")
 
                     # if policy_id == "dqn_policy1":
                     #     print(policy_id)
@@ -425,20 +452,25 @@ class SyncReplayOptimizer(PolicyOptimizer):
             try:
                 # import ipdb; ipdb.set_trace()
                 for idx in range(6):
-                    with open('./csv_results/'+str(self.csv_count)+"_"+self.csv_file[idx], 'w') as csvfile:
+                    with open('./csv_results/' + str(self.csv_count) + "_" + self.csv_file[idx], 'w') as csvfile:
                         writer = csv.DictWriter(csvfile, fieldnames=self.csv_columns)
                         writer.writeheader()
-                        for trajectory in self.debug_temp_replay_buffers["dqn_policy"+str(idx)]:
+                        for trajectory in self.debug_temp_replay_buffers["dqn_policy" + str(idx)]:
                             # self.csv_columns =
                             # ['t', 'agent_index', 'obs', 'packetid', 'delivery', 'rewards', 'new_reward', 'movetooriginal']
-                            writer.writerow({'t':trajectory['t'],
-                                             'agent_index':trajectory['agent_index'],
-                                             'obs':trajectory['obs'],
-                                             'packetid':trajectory['infos']['packetid'][0],
-                                             'delivery':trajectory['infos']['delivery'][0],
-                                             'rewards':trajectory['rewards'],
-                                             'new_reward':trajectory['new_reward'],
-                                             'movetooriginal':trajectory['movetooriginal']})
+                            writer.writerow({'t': trajectory['t'],
+                                             'agent_index': trajectory['agent_index'],
+                                             'obs': trajectory['obs'],
+                                             'packetid': trajectory['infos']['packetid'][0],
+                                             'delivery': trajectory['infos']['delivery'][0],
+                                             'rewards': trajectory['rewards'],
+                                             'new_reward': trajectory['new_reward'],
+                                             'dones': 1 if trajectory['dones'] else 0,
+                                             'actions': trajectory['actions'],
+                                             'movetooriginal': trajectory['movetooriginal'],
+                                             'n_ack': trajectory['infos']['n_ack'][0]
+                                             # 'delivery_states': trajectory['infos']['delivery_states']
+                                             })
                 self.csv_count += 1
                 # with open(self.csv_file[1], 'w') as csvfile:
                 #     writer = csv.DictWriter(csvfile, fieldnames=self.csv_columns)
@@ -494,7 +526,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
                         if np.inf not in row["infos"]["delivery_states"][-1][policy_dict[policy_id]]:
                             for trajectory in self.temp_replay_buffers[policy_id]:
                                 if (trajectory["infos"]["packetid"][0] == row["infos"]["packetid"][0]) and \
-                                        (trajectory["infos"]["delivery"][0] != 1) :
+                                        (trajectory["infos"]["delivery"][0] != 1):
                                     # Change rewards and delivery flag
                                     # import ipdb; ipdb.set_trace()
                                     trajectory["rewards"] += self.num_agents
@@ -504,12 +536,13 @@ class SyncReplayOptimizer(PolicyOptimizer):
                                     # print(policy_id, trajectory['t'], trajectory["rewards"], trajectory["infos"]["packetid"][0])
                                     # print("TEMP\t", trajectory["rewards"])
                                     if self.debug_print:
-                                        print("##### UPDATE REWARD #####\nTEMP", policy_dict[policy_id], "reward ", trajectory["rewards"], " packetid ", trajectory["infos"]["packetid"][0])
+                                        print("##### UPDATE REWARD #####\nTEMP", policy_dict[policy_id], "reward ",
+                                              trajectory["rewards"], " packetid ", trajectory["infos"]["packetid"][0])
 
                             # For debugging temp replay buffer states
                             for d_trajectory in self.debug_temp_replay_buffers[policy_id]:
                                 if (d_trajectory["infos"]["packetid"][0] == row["infos"]["packetid"][0]) and \
-                                        (d_trajectory["infos"]["delivery"][0] != 1) and\
+                                        (d_trajectory["infos"]["delivery"][0] != 1) and \
                                         (d_trajectory["movetooriginal"] != 1):
                                     # Change rewards and delivery flag
                                     d_trajectory["new_reward"] = self.num_agents + d_trajectory["rewards"]
@@ -539,7 +572,8 @@ class SyncReplayOptimizer(PolicyOptimizer):
                         print("TEMP", agent_i)
                         print("reward\t\t", " delivery\t", " packetid")
                         for traj in self.temp_replay_buffers[agent_i]:
-                            print("   ", traj["rewards"], "\t\t   ", traj["infos"]["delivery"][0], "\t\t   ", traj["infos"]["packetid"][0])
+                            print("   ", traj["rewards"], "\t\t   ", traj["infos"]["delivery"][0], "\t\t   ",
+                                  traj["infos"]["packetid"][0])
                         else:
                             print("")
         # If length of steps is more than 20
@@ -587,7 +621,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
                 if isinstance(replay_buffer, PrioritizedReplayBuffer):
                     td_error = info["td_error"]
                     new_priorities = (
-                        np.abs(td_error) + self.prioritized_replay_eps)
+                            np.abs(td_error) + self.prioritized_replay_eps)
                     replay_buffer.update_priorities(
                         samples.policy_batches[policy_id]["batch_indexes"],
                         new_priorities)
