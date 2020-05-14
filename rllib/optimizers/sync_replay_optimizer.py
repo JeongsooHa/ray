@@ -1,6 +1,7 @@
 import logging
 import collections
 import numpy as np
+import random
 
 import ray
 from ray.rllib.optimizers.replay_buffer import ReplayBuffer, \
@@ -201,7 +202,17 @@ class SyncReplayOptimizer(PolicyOptimizer):
         self.num_steps_sampled += batch.count
 
     def input_data_and_check_packetid(self, policy_id, row):
-
+        # Shuffle obs
+        num_agents = int(len(row['obs'])/2)
+        assert isinstance(num_agents, int)
+        C = row['obs'][:num_agents]
+        H = row['obs'][num_agents:]
+        indices = np.arange(C.shape[0])
+        np.random.shuffle(indices)
+        C = C[indices]
+        H = H[indices]
+        row['obs'] = np.concatenate((C, H), axis=0)
+        
         # Check busy node. If the agent is busy, packetid is -1.
         if row["infos"]["packetid"][0] == -1:
             return None
