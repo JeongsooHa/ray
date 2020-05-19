@@ -2,8 +2,9 @@ import logging
 import collections
 import numpy as np
 import random
-
+import itertools
 import ray
+
 from ray.rllib.optimizers.replay_buffer import ReplayBuffer, \
     PrioritizedReplayBuffer
 from ray.rllib.optimizers.policy_optimizer import PolicyOptimizer
@@ -61,6 +62,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
             prioritized_replay_beta_annealing_timesteps (int): The timestep at
                 which PR-beta annealing should end.
         """
+        print("################ RAY 20_05_19_17_25 ################")
         PolicyOptimizer.__init__(self, workers)
 
         self.replay_starts = learning_starts
@@ -202,16 +204,6 @@ class SyncReplayOptimizer(PolicyOptimizer):
         self.num_steps_sampled += batch.count
 
     def input_data_and_check_packetid(self, policy_id, row):
-        # Shuffle obs
-        num_agents = int(len(row['obs'])/2)
-        assert isinstance(num_agents, int)
-        C = row['obs'][:num_agents]
-        H = row['obs'][num_agents:]
-        indices = np.arange(C.shape[0])
-        np.random.shuffle(indices)
-        C = C[indices]
-        H = H[indices]
-        row['obs'] = np.concatenate((C, H), axis=0)
         
         # Check busy node. If the agent is busy, packetid is -1.
         if row["infos"]["packetid"][0] == -1:
@@ -237,8 +229,24 @@ class SyncReplayOptimizer(PolicyOptimizer):
                                 print("##### UPDATE REWARD #####\nTEMP", agent_id, "reward ", trajectory["rewards"], " packetid ", trajectory["infos"]["packetid"][0])
 
             else:
-                # Put data into temp_replay_buffers if delivery flag is not 1.
-                self.temp_replay_buffers[policy_id].append(row)
+                # import ipdb;ipdb.set_trace()
+                # Shuffle obs
+                num_agents = int(len(row['obs']) / 2)
+                assert isinstance(num_agents, int)
+                C = row['obs'][:num_agents]
+                H = row['obs'][num_agents:]
+                indices = np.arange(C.shape[0])
+                y_permuatation = list(itertools.permutations(indices, num_agents))
+                samplings = random.choices(y_permuatation, k=num_agents)
+
+                for sampling in samplings:
+                    C = C[np.array(sampling)]
+                    H = H[np.array(sampling)]
+                    row['obs'] = np.concatenate((C, H), axis=0)
+                    # print(sampling)
+                    # Put data into temp_replay_buffers if delivery flag is not 1.
+                    self.temp_replay_buffers[policy_id].append(row)
+
                 if self.debug_print:
                     for agent_i in self.temp_replay_buffers.keys():
                         print("TEMP", agent_i)
@@ -248,7 +256,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
                         else:
                             print("")
         # If length of steps is more than 20
-        if self.num_steps_sampled > 1000:
+        if (self.num_steps_sampled > 1000) and (len(self.temp_replay_buffers[policy_id]) > 1000):
             try:
                 return self.temp_replay_buffers[policy_id].pop(0)
             except Exception:
