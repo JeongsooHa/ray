@@ -1,6 +1,8 @@
 import logging
 import collections
 import numpy as np
+import random
+import itertools
 
 import ray
 from ray.rllib.optimizers.replay_buffer import ReplayBuffer, \
@@ -60,6 +62,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
             prioritized_replay_beta_annealing_timesteps (int): The timestep at
                 which PR-beta annealing should end.
         """
+        print("################ Customized RAY ################")
         PolicyOptimizer.__init__(self, workers)
 
         self.replay_starts = learning_starts
@@ -97,9 +100,15 @@ class SyncReplayOptimizer(PolicyOptimizer):
 
         self.replay_buffers = collections.defaultdict(new_buffer)
 
+        self.temp_replay_buffers = {}
+        self.buffer_countor = {}
+        self.init = True
+        self.num_agents = 0
+
         if buffer_size < self.replay_starts:
             logger.warning("buffer_size={} < replay_starts={}".format(
                 buffer_size, self.replay_starts))
+        self.debug_print = False
 
         # If set, will use this batch for stepping/updating, instead of
         # sampling from the replay buffer. Actual sampling from the env
@@ -110,12 +119,15 @@ class SyncReplayOptimizer(PolicyOptimizer):
 
     @override(PolicyOptimizer)
     def step(self):
+        if self.debug_print:
+            print("##### Call step function in DQN")
         with self.update_weights_timer:
             if self.workers.remote_workers():
                 weights = ray.put(self.workers.local_worker().get_weights())
                 for e in self.workers.remote_workers():
                     e.set_weights.remote(weights)
-
+        if self.debug_print:
+            print("##### finished set_weights")
         with self.sample_timer:
             if self.workers.remote_workers():
                 batch = SampleBatch.concat_samples(
@@ -131,21 +143,102 @@ class SyncReplayOptimizer(PolicyOptimizer):
                 batch = MultiAgentBatch({
                     DEFAULT_POLICY_ID: batch
                 }, batch.count)
+            
+            if self.init:
+                for policy_id, s in batch.policy_batches.items():
+                    self.num_agents += 1
+                    self.temp_replay_buffers[policy_id] = []
+                    self.buffer_countor[policy_id] = 0
+                self.init = False
 
             for policy_id, s in batch.policy_batches.items():
                 for row in s.rows():
-                    self.replay_buffers[policy_id].add(
-                        pack_if_needed(row["obs"]),
-                        row["actions"],
-                        row["rewards"],
-                        pack_if_needed(row["new_obs"]),
-                        row["dones"],
-                        weight=None)
+                    trajectory = self.input_data_and_check_packetid(policy_id, row)
+                    if trajectory is not None:
+                        # put data into original buffer if length of temp RB is 20
+                        if self.debug_print:
+                            print("Origin replay buffer  packID", trajectory["infos"]["packetid"][0], "reward",
+                                  trajectory["rewards"], "delivery", trajectory["infos"]["delivery"][0])
+                        self.replay_buffers[policy_id].add(
+                            trajectory["obs"],
+                            trajectory["actions"],
+                            trajectory["rewards"],
+                            trajectory["new_obs"],
+                            trajectory["dones"],
+                            weight=None)
+                        self.buffer_countor[policy_id] += 1
 
-        if self.num_steps_sampled >= self.replay_starts:
+        # if self.num_steps_sampled >= self.replay_starts:
+        #     self._optimize()
+
+        # If the minimum number in the buffer is self.replay_starts or more
+        if min(self.buffer_countor.values()) >= self.replay_starts:
             self._optimize()
 
+
         self.num_steps_sampled += batch.count
+
+    def input_data_and_check_packetid(self, policy_id, row):
+        
+        # Check busy node. If the agent is busy, packetid is -1.
+        if row["infos"]["packetid"][0] == -1:
+            return None
+        else:
+            # obs = ["C", "H"]
+            # infos = ["delivery", "nACKs", "packet id"]
+            # Check delivery flag. If the packet is delivered, delivery is 1.
+            # We have to check if that packetid is in temp_replay_buffer.
+            if row["infos"]["delivery"][0] == 1:
+                if self.debug_print:
+                    print("##### delivery == 1 #####")
+                # Find same packet id
+                # Check if there is the same packet id in temp_repaly_buffer.
+                for agent_id in self.temp_replay_buffers.keys():
+                    for trajectory in self.temp_replay_buffers[agent_id]:
+                        if (trajectory["infos"]["packetid"][0] == row["infos"]["packetid"][0]) and \
+                                (trajectory["infos"]["delivery"][0] != 1) :
+                            # Change rewards and delivery flag
+                            trajectory["rewards"] += self.num_agents
+                            trajectory["infos"]["delivery"][0] = 1
+                            if self.debug_print:
+                                print("##### UPDATE REWARD #####\nTEMP", agent_id, "reward ", trajectory["rewards"], " packetid ", trajectory["infos"]["packetid"][0])
+
+            else:
+                # import ipdb;ipdb.set_trace()
+                # Shuffle obs
+                num_agents = int(len(row['obs']) / 2)
+                assert isinstance(num_agents, int)
+                C = row['obs'][:num_agents]
+                H = row['obs'][num_agents:]
+                indices = np.arange(C.shape[0])
+                y_permuatation = list(itertools.permutations(indices, num_agents))
+                samplings = random.choices(y_permuatation, k=num_agents)
+
+                for sampling in samplings:
+                    C = C[np.array(sampling)]
+                    H = H[np.array(sampling)]
+                    row['obs'] = np.concatenate((C, H), axis=0)
+                    # print(sampling)
+                    # Put data into temp_replay_buffers if delivery flag is not 1.
+                    self.temp_replay_buffers[policy_id].append(row)
+
+                if self.debug_print:
+                    for agent_i in self.temp_replay_buffers.keys():
+                        print("TEMP", agent_i)
+                        print("reward\t\t", " delivery\t", " packetid")
+                        for traj in self.temp_replay_buffers[agent_i]:
+                            print("   ", traj["rewards"], "\t\t   ", traj["infos"]["delivery"][0], "\t\t   ", traj["infos"]["packetid"][0])
+                        else:
+                            print("")
+        # If length of steps is more than 20
+        if (self.num_steps_sampled > 1000) and (len(self.temp_replay_buffers[policy_id]) > 1000):
+            try:
+                return self.temp_replay_buffers[policy_id].pop(0)
+            except Exception:
+                # If there is no data in temp_replay_buffer
+                return None
+        else:
+            return None
 
     @override(PolicyOptimizer)
     def stats(self):

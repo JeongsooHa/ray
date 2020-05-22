@@ -1,6 +1,7 @@
 from ray.rllib.agents.trainer import with_common_config
 from ray.rllib.agents.dqn.dqn import GenericOffPolicyTrainer
 from ray.rllib.agents.sac.sac_tf_policy import SACTFPolicy
+from ray.rllib.agents.sac.sac_torch_policy import SACTorchPolicy
 from ray.rllib.utils.deprecation import deprecation_warning, DEPRECATED_VALUE
 
 OPTIMIZER_SHARED_CONFIGS = [
@@ -12,6 +13,7 @@ OPTIMIZER_SHARED_CONFIGS = [
 # yapf: disable
 # __sphinx_doc_begin__
 DEFAULT_CONFIG = with_common_config({
+    "use_pytorch": True,
     # === Model ===
     "twin_q": True,
     "use_state_preprocessor": False,
@@ -31,7 +33,7 @@ DEFAULT_CONFIG = with_common_config({
     },
     # Unsquash actions to the upper and lower bounds of env's action space.
     # Ignored for discrete action spaces.
-    "normalize_actions": True,
+    "normalize_actions": False,
 
     # === Learning ===
     # Disable setting done=True at end of episode. This should be set to True
@@ -151,6 +153,6 @@ SACTrainer = GenericOffPolicyTrainer.with_updates(
     name="SAC",
     default_config=DEFAULT_CONFIG,
     validate_config=validate_config,
-    default_policy=SACTFPolicy,
+    default_policy=SACTorchPolicy,
     get_policy_class=get_policy_class,
 )
