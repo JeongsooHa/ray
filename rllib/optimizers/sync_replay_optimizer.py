@@ -62,7 +62,8 @@ class SyncReplayOptimizer(PolicyOptimizer):
             prioritized_replay_beta_annealing_timesteps (int): The timestep at
                 which PR-beta annealing should end.
         """
-        print("################ Customized RAY ################")
+        print("################ Customized RAY 6_23_16_22 ################")
+        self.use_temp_replay_buffer = False
         PolicyOptimizer.__init__(self, workers)
 
         self.replay_starts = learning_starts
@@ -100,10 +101,11 @@ class SyncReplayOptimizer(PolicyOptimizer):
 
         self.replay_buffers = collections.defaultdict(new_buffer)
 
-        self.temp_replay_buffers = {}
-        self.buffer_countor = {}
-        self.init = True
-        self.num_agents = 0
+        if self.use_temp_replay_buffer:
+            self.temp_replay_buffers = {}
+            self.buffer_countor = {}
+            self.init = True
+            self.num_agents = 0
 
         if buffer_size < self.replay_starts:
             logger.warning("buffer_size={} < replay_starts={}".format(
@@ -143,38 +145,49 @@ class SyncReplayOptimizer(PolicyOptimizer):
                 batch = MultiAgentBatch({
                     DEFAULT_POLICY_ID: batch
                 }, batch.count)
-            
-            if self.init:
+
+            if self.use_temp_replay_buffer:
+                if self.init:
+                    for policy_id, s in batch.policy_batches.items():
+                        self.num_agents += 1
+                        self.temp_replay_buffers[policy_id] = []
+                        self.buffer_countor[policy_id] = 0
+                    self.init = False
+
                 for policy_id, s in batch.policy_batches.items():
-                    self.num_agents += 1
-                    self.temp_replay_buffers[policy_id] = []
-                    self.buffer_countor[policy_id] = 0
-                self.init = False
+                    for row in s.rows():
+                        trajectory = self.input_data_and_check_packetid(policy_id, row)
+                        if trajectory is not None:
+                            # put data into original buffer if length of temp RB is 20
+                            if self.debug_print:
+                                print("Origin replay buffer  packID", trajectory["infos"]["packetid"][0], "reward",
+                                      trajectory["rewards"], "delivery", trajectory["infos"]["delivery"][0])
+                            self.replay_buffers[policy_id].add(
+                                trajectory["obs"],
+                                trajectory["actions"],
+                                trajectory["rewards"],
+                                trajectory["new_obs"],
+                                trajectory["dones"],
+                                weight=None)
+                            self.buffer_countor[policy_id] += 1
 
-            for policy_id, s in batch.policy_batches.items():
-                for row in s.rows():
-                    trajectory = self.input_data_and_check_packetid(policy_id, row)
-                    if trajectory is not None:
-                        # put data into original buffer if length of temp RB is 20
-                        if self.debug_print:
-                            print("Origin replay buffer  packID", trajectory["infos"]["packetid"][0], "reward",
-                                  trajectory["rewards"], "delivery", trajectory["infos"]["delivery"][0])
+                # If the minimum number in the buffer is self.replay_starts or more
+                if min(self.buffer_countor.values()) >= self.replay_starts:
+                    self._optimize()
+
+            else:
+                for policy_id, s in batch.policy_batches.items():
+                    for row in s.rows():
                         self.replay_buffers[policy_id].add(
-                            trajectory["obs"],
-                            trajectory["actions"],
-                            trajectory["rewards"],
-                            trajectory["new_obs"],
-                            trajectory["dones"],
+                            pack_if_needed(row["obs"]),
+                            row["actions"],
+                            row["rewards"],
+                            pack_if_needed(row["new_obs"]),
+                            row["dones"],
                             weight=None)
-                        self.buffer_countor[policy_id] += 1
 
-        # if self.num_steps_sampled >= self.replay_starts:
-        #     self._optimize()
-
-        # If the minimum number in the buffer is self.replay_starts or more
-        if min(self.buffer_countor.values()) >= self.replay_starts:
-            self._optimize()
-
+                if self.num_steps_sampled >= self.replay_starts:
+                    self._optimize()
 
         self.num_steps_sampled += batch.count
 
