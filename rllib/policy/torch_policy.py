@@ -97,6 +97,8 @@ class TorchPolicy(Policy):
     @override(Policy)
     def compute_actions(self,
                         obs_batch,
+                        other_group_actions,
+                        policy_id,
                         state_batches=None,
                         prev_action_batch=None,
                         prev_reward_batch=None,
@@ -141,6 +143,7 @@ class TorchPolicy(Policy):
                         self.action_distribution_fn(
                             self,
                             self.model,
+                            other_group_actions,
                             input_dict[SampleBatch.CUR_OBS],
                             explore=explore,
                             timestep=timestep,
@@ -159,7 +162,6 @@ class TorchPolicy(Policy):
                         explore=explore)
 
             input_dict[SampleBatch.ACTIONS] = actions
-
             # Add default and custom fetches.
             extra_fetches = self.extra_action_out(input_dict, state_batches,
                                                   self.model, action_dist)
@@ -171,8 +173,11 @@ class TorchPolicy(Policy):
             # Action-dist inputs.
             if dist_inputs is not None:
                 extra_fetches[SampleBatch.ACTION_DIST_INPUTS] = dist_inputs
-            return convert_to_non_torch_type((actions, state_out,
-                                              extra_fetches))
+            results = convert_to_non_torch_type((actions, state_out,
+                                       extra_fetches))
+            other_group_actions[policy_id] = results[0]
+            # print("other_group_actions",other_group_actions)
+            return results
 
     @override(Policy)
     def compute_log_likelihoods(self,

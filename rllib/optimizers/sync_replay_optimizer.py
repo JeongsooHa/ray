@@ -30,7 +30,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
     def __init__(
             self,
             workers,
-            learning_starts=1000,
+            learning_starts=10,
             buffer_size=10000,
             prioritized_replay=True,
             prioritized_replay_alpha=0.6,
@@ -62,7 +62,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
             prioritized_replay_beta_annealing_timesteps (int): The timestep at
                 which PR-beta annealing should end.
         """
-        print("################ Customized RAY 6_23_16_22 ################")
+        print("################ group actions Customized RAY 6_23_21_16 ################")
         self.use_temp_replay_buffer = False
         PolicyOptimizer.__init__(self, workers)
 
@@ -171,9 +171,6 @@ class SyncReplayOptimizer(PolicyOptimizer):
                                 weight=None)
                             self.buffer_countor[policy_id] += 1
 
-                # If the minimum number in the buffer is self.replay_starts or more
-                if min(self.buffer_countor.values()) >= self.replay_starts:
-                    self._optimize()
 
             else:
                 for policy_id, s in batch.policy_batches.items():
@@ -186,8 +183,14 @@ class SyncReplayOptimizer(PolicyOptimizer):
                             row["dones"],
                             weight=None)
 
-                if self.num_steps_sampled >= self.replay_starts:
-                    self._optimize()
+
+        if self.use_temp_replay_buffer:
+            # If the minimum number in the buffer is self.replay_starts or more
+            if min(self.buffer_countor.values()) >= self.replay_starts:
+                self._optimize()
+        else:
+            if self.num_steps_sampled >= self.replay_starts:
+                self._optimize()
 
         self.num_steps_sampled += batch.count
 
@@ -306,6 +309,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
     def _replay(self):
         samples = {}
         idxes = None
+
         with self.replay_timer:
             for policy_id, replay_buffer in self.replay_buffers.items():
                 if self.synchronize_sampling:

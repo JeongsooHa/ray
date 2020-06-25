@@ -560,7 +560,7 @@ def _do_policy_eval(tf_sess, to_eval, policies, active_episodes):
     Returns:
         eval_results: dict of policy to compute_action() outputs.
     """
-
+    other_group_actions = {}
     eval_results = {}
 
     if tf_sess:
@@ -602,6 +602,8 @@ def _do_policy_eval(tf_sess, to_eval, policies, active_episodes):
             ]
             eval_results[policy_id] = policy.compute_actions(
                 [t.obs for t in eval_data],
+                other_group_actions,
+                policy_id,
                 state_batches=rnn_in_cols,
                 prev_action_batch=[t.prev_action for t in eval_data],
                 prev_reward_batch=[t.prev_reward for t in eval_data],
