@@ -62,7 +62,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
             prioritized_replay_beta_annealing_timesteps (int): The timestep at
                 which PR-beta annealing should end.
         """
-        print("################ group actions Customized RAY 6_23_21_16 ################")
+        print("################ group actions Customized RAY 6_29_15_58 ################")
         self.use_temp_replay_buffer = False
         PolicyOptimizer.__init__(self, workers)
 
@@ -156,20 +156,23 @@ class SyncReplayOptimizer(PolicyOptimizer):
 
                 for policy_id, s in batch.policy_batches.items():
                     for row in s.rows():
-                        trajectory = self.input_data_and_check_packetid(policy_id, row)
-                        if trajectory is not None:
+                        trajectories = self.input_data_and_check_packetid(policy_id, row)
+                        if trajectories is not None:
                             # put data into original buffer if length of temp RB is 20
-                            if self.debug_print:
-                                print("Origin replay buffer  packID", trajectory["infos"]["packetid"][0], "reward",
-                                      trajectory["rewards"], "delivery", trajectory["infos"]["delivery"][0])
-                            self.replay_buffers[policy_id].add(
-                                trajectory["obs"],
-                                trajectory["actions"],
-                                trajectory["rewards"],
-                                trajectory["new_obs"],
-                                trajectory["dones"],
-                                weight=None)
-                            self.buffer_countor[policy_id] += 1
+                            for traj in trajectories:
+                                trajectory = traj[0]
+                                policy_i = traj[1]
+                                if self.debug_print:
+                                    print("Origin replay buffer  packID", trajectory["infos"]["packetid"][0], "reward",
+                                          trajectory["rewards"], "delivery", trajectory["infos"]["delivery"][0])
+                                self.replay_buffers[policy_i].add(
+                                    trajectory["obs"],
+                                    trajectory["actions"],
+                                    trajectory["rewards"],
+                                    trajectory["new_obs"],
+                                    trajectory["dones"],
+                                    weight=None)
+                                self.buffer_countor[policy_i] += 1
 
 
             else:
@@ -182,7 +185,11 @@ class SyncReplayOptimizer(PolicyOptimizer):
                             pack_if_needed(row["new_obs"]),
                             row["dones"],
                             weight=None)
-
+        # print("")
+        # replay_buffers_keys = sorted(self.replay_buffers.keys())
+        # for key in replay_buffers_keys:
+        #     print("len of",key,":",len(self.replay_buffers[key]))
+        # print("")
 
         if self.use_temp_replay_buffer:
             # If the minimum number in the buffer is self.replay_starts or more
@@ -195,7 +202,103 @@ class SyncReplayOptimizer(PolicyOptimizer):
         self.num_steps_sampled += batch.count
 
     def input_data_and_check_packetid(self, policy_id, row):
-        
+
+        trajectories = list()
+        # Check busy node. If the agent is busy, packetid is -1.
+        if row["infos"]["packetid"][0] == -1:
+            return None
+        else:
+            # obs = ["C", "H"]
+            # infos = ["delivery", "nACKs", "packet id"]
+            # Check delivery flag. If the packet is delivered, delivery is 1.
+            # We have to check if that packetid is in temp_replay_buffer.
+            if row["infos"]["delivery"][0] == 1:
+                # if self.debug_print:
+                # print("##### delivery == 1 #####")
+                # Find same packet id
+                # Check if there is the same packet id in temp_repaly_buffer.
+                for policy_i in self.temp_replay_buffers.keys():
+                    agent_id = 'agent-' + str(policy_i[len('dqn_policy'):])
+                    # print('length tmp_rep_buf : ', len(self.temp_replay_buffers[policy_i]))
+                    for traj_idx, trajectory in enumerate(self.temp_replay_buffers[policy_i][:]):
+                        if (trajectory["infos"]["packetid"][0] == row["infos"]["packetid"][0]) and \
+                                (trajectory["infos"]["delivery"][0] != 1) and \
+                                agent_id in row["infos"]["delivery_states"][-1].keys():
+                            if row["infos"]["delivery_states"][-1][agent_id][1] != np.inf:
+                                # Change rewards and delivery flag
+                                trajectory["rewards"] += self.num_agents
+                                trajectory["infos"]["delivery"][0] = 1
+                                # add trajectory to list to transfer to org_rep_buf
+                                # TODO shuffle and then pass to trajectories
+                                # pass a tuple with trajectory's policy_id
+                                trajectories.append((trajectory, policy_i))
+                                # reward is updated, remove from temp_replay_buffer, put in the return_list
+                                self.temp_replay_buffers[policy_i].pop(traj_idx)
+
+                                # if self.debug_print:
+                                # print("##### UPDATE REWARD #####\nTEMP", agent_id, "reward ", trajectory["rewards"], " packetid ", trajectory["infos"]["packetid"][0])
+                            else:
+                                # the delivery was from another path, remove from tmp_rep_buf
+                                self.temp_replay_buffers[policy_i].pop(traj_idx)
+
+                # search is don, done with row, no further update is needed, move to org_rep_buf
+                trajectories.append((row, policy_id))
+
+            else:
+                # no delivery, not busy node, then no update is done
+                # Put row on tmp_rep_buf
+                self.temp_replay_buffers[policy_id].append(row)
+
+                # import ipdb;ipdb.set_trace()
+
+                # Shuffle obs
+
+                # num_agents = int(len(row['obs']) / 2)
+                # assert isinstance(num_agents, int)
+                # C = row['obs'][:num_agents]
+                # H = row['obs'][num_agents:]
+                # indices = np.arange(C.shape[0])
+                # y_permuatation = list(itertools.permutations(indices, num_agents))
+                # samplings = random.choices(y_permuatation, k=num_agents)
+
+                # for sampling in samplings:
+                #     C = C[np.array(sampling)]
+                #     H = H[np.array(sampling)]
+                #     row['obs'] = np.concatenate((C, H), axis=0)
+                # print(sampling)
+                # Put shuffled data row into tmp_rep_buf
+                # self.temp_replay_buffers[policy_id].append(row)
+
+                if self.debug_print:
+                    for agent_i in self.temp_replay_buffers.keys():
+                        print("TEMP", agent_i)
+                        print("reward\t\t", " delivery\t", " packetid")
+                        for traj in self.temp_replay_buffers[agent_i]:
+                            print("   ", traj["rewards"], "\t\t   ", traj["infos"]["delivery"][0], "\t\t   ",
+                                  traj["infos"]["packetid"][0])
+                        else:
+                            print("")
+
+        # TODO: if we return multiple trajectory every time, we may not hit the size limit always
+        # if trajectories not updated then left at the tmp_rep_buf, we will empty independent of size
+
+        # TODO: what if the episode is done, we should transfer all tmp_rep_buf to org_rep_buf
+
+        if (self.num_steps_sampled > 50) and (len(self.temp_replay_buffers[policy_id]) > 50):
+            try:
+                # TODO Do we empty tmp_rep_buf with the rate added? specially when shuffling data.
+                trajectories.append((self.temp_replay_buffers[policy_id].pop(0), policy_id))
+                # print('mean of rewards transferred to org_rep_buf : ',  np.mean([t[0]['rewards']for t in trajectories]))
+                return trajectories
+                # return self.temp_replay_buffers[policy_id].pop(0)
+            except Exception:
+                # If there is no data in temp_replay_buffer
+                return None
+        else:
+            return trajectories
+            # return None
+
+        '''
         # Check busy node. If the agent is busy, packetid is -1.
         if row["infos"]["packetid"][0] == -1:
             return None
@@ -255,6 +358,7 @@ class SyncReplayOptimizer(PolicyOptimizer):
                 return None
         else:
             return None
+        '''
 
     @override(PolicyOptimizer)
     def stats(self):
