@@ -38,6 +38,7 @@ def get_dist_class(config, action_space):
 
 def action_distribution_fn(policy,
                            model,
+                           _,
                            obs_batch,
                            *,
                            state_batches=None,

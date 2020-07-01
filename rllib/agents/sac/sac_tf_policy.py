@@ -97,9 +97,6 @@ def postprocess_trajectory(policy,
                            sample_batch,
                            other_agent_batches=None,
                            episode=None):
-    if sample_batch:
-        # print(sample_batch.keys())
-        print(sample_batch['action_dist_inputs'])
     return postprocess_nstep_and_prio(policy, sample_batch)
 
 
